@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-DB_PATH = ROOT / "out" / "signals.db"
+DB_PATH = Path(os.environ.get("SPLIT_CODE_DB") or ROOT / "out" / "signals.db")
 PROMPT_VERSION = "failure-v1"
 
 

@@ -14,6 +14,13 @@ from score import CACHE_PATH, score_one
 from storage import PROMPT_VERSION, connect, import_nhtsa, migrate_jsonl
 
 DEFAULT_COMPLAINTS = Path("/tmp/COMPLAINTS_RECEIVED_2025-2026.txt")
+PRICE_PER_TOKEN = 0.042 / 1_000_000
+EXIT_BUDGET = 0
+EXIT_BILLING = 3
+
+
+class BillingError(RuntimeError):
+    pass
 
 
 def pending_rows(limit: int | None = None) -> list[dict]:
@@ -82,22 +89,27 @@ def save_score(connection, result: dict) -> None:
     )
 
 
-def score_pending(api_key: str, workers: int, limit: int | None) -> None:
+def score_pending(
+    api_key: str, workers: int, limit: int | None, max_cost: float | None
+) -> dict:
     records = pending_rows(limit)
     total = len(records)
     if not total:
         print("nothing to score", flush=True)
-        return
+        return {"scored": 0, "failures": 0, "cost": 0.0, "stopped": None}
 
     connection = connect()
     started = time.monotonic()
     completed = 0
     failures = 0
     token_total = 0
+    stopped = None
     iterator = iter(records)
     inflight = {}
 
     def submit_next(pool) -> bool:
+        if stopped:
+            return False
         try:
             record = next(iterator)
         except StopIteration:
@@ -121,16 +133,25 @@ def score_pending(api_key: str, workers: int, limit: int | None) -> None:
                         token_total += int(usage.get("input_tokens") or 0)
                     except Exception as exc:
                         failures += 1
-                        print(f"error {record['odi']}: {exc}", file=sys.stderr, flush=True)
+                        message = str(exc)
+                        if "HTTP 402" in message or "billing_error" in message:
+                            if not stopped:
+                                print(f"stopping: Jev billing error: {message}", file=sys.stderr, flush=True)
+                            stopped = "billing"
+                        else:
+                            print(f"error {record['odi']}: {message}", file=sys.stderr, flush=True)
                     completed += 1
+                    if max_cost is not None and token_total * PRICE_PER_TOKEN >= max_cost and not stopped:
+                        print(f"stopping: reached the ${max_cost:.2f} budget", flush=True)
+                        stopped = "budget"
                     submit_next(pool)
 
-                    if completed % 100 == 0 or completed == total:
+                    if completed % 500 == 0 or completed == total:
                         connection.commit()
                         elapsed = time.monotonic() - started
                         rate = completed / elapsed
                         remaining = (total - completed) / rate if rate else 0
-                        cost = token_total * 0.042 / 1_000_000
+                        cost = token_total * PRICE_PER_TOKEN
                         print(
                             f"scored {completed}/{total} | {rate:.1f}/s | "
                             f"ETA {remaining / 60:.1f}m | ${cost:.2f} | "
@@ -140,6 +161,12 @@ def score_pending(api_key: str, workers: int, limit: int | None) -> None:
         connection.commit()
     finally:
         connection.close()
+    return {
+        "scored": completed - failures,
+        "failures": failures,
+        "cost": round(token_total * PRICE_PER_TOKEN, 4),
+        "stopped": stopped,
+    }
 
 
 def main() -> None:
@@ -148,6 +175,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--import-only", action="store_true")
+    parser.add_argument("--max-cost", type=float, help="Stop scoring after this many dollars of Jev usage")
     args = parser.parse_args()
 
     count = import_nhtsa(args.complaints)
@@ -159,7 +187,15 @@ def main() -> None:
     api_key = os.environ.get("TYPESAFE_API_KEY", "").strip()
     if not api_key:
         raise SystemExit("Set TYPESAFE_API_KEY")
-    score_pending(api_key, args.workers, args.limit)
+    result = score_pending(api_key, args.workers, args.limit, args.max_cost)
+    print(
+        f"run: scored {result['scored']}, errors {result['failures']}, "
+        f"${result['cost']:.2f}, stopped={result['stopped']}",
+        flush=True,
+    )
+    if result["stopped"] == "billing":
+        sys.exit(EXIT_BILLING)
+    sys.exit(EXIT_BUDGET)
 
 
 if __name__ == "__main__":

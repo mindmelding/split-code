@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Split Code — complaint cross-sections</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/">Split Code</a>
+    <p class="tagline">Where the complaints say it broke, not where they were filed.</p>
+    <div class="segmented" id="window" role="radiogroup" aria-label="Time window">
+      <button type="button" data-value="30">30D</button>
+      <button type="button" data-value="90" class="on">90D</button>
+      <button type="button" data-value="365">1Y</button>
+      <button type="button" data-value="all">All</button>
+    </div>
+    <label class="search">
+      <span class="sr">Find a vehicle</span>
+      <input id="vehicle" type="search" list="vehicles" placeholder="Find a vehicle — e.g. Odyssey" autocomplete="off" />
+      <datalist id="vehicles"></datalist>
+    </label>
+  </header>
+
+  <nav class="filters">
+    <div class="bodies" id="bodies"></div>
+    <div id="activePart"></div>
+    <label class="failure">
+      <span>Failure</span>
+      <select id="failure"></select>
+    </label>
+  </nav>
+
+  <main class="layout">
+    <aside class="rail">
+      <div class="rail-head">
+        <p class="label" id="railCount">Signals</p>
+        <div class="segmented small" id="sort" role="radiogroup" aria-label="Rank by">
+          <button type="button" data-value="momentum" class="on">Rising</button>
+          <button type="button" data-value="volume">Largest</button>
+          <button type="button" data-value="severity">Severe</button>
+        </div>
+      </div>
+      <ol class="signals" id="signals"></ol>
+    </aside>
+
+    <section class="stage">
+      <div class="stage-head">
+        <p class="label" id="fig">Fig. 01 — Side elevation, section A–A</p>
+        <h1 id="vehicleName">&nbsp;</h1>
+        <p class="failure-name" id="failureName">&nbsp;</p>
+      </div>
+      <div class="drawing" id="drawing"></div>
+      <div class="timeline">
+        <div class="timeline-head">
+          <p class="label" id="scrubLabel">Weekly complaints · last 26 weeks</p>
+          <button type="button" class="ghost" id="scrubNow" hidden>Back to now</button>
+        </div>
+        <div class="timeline-chart" id="timeline" role="slider" tabindex="0" aria-label="Scrub through weeks"></div>
+      </div>
+      <div class="stage-foot">
+        <div class="segmented small" id="mode" role="radiogroup" aria-label="Drawing mode">
+          <button type="button" data-value="assembled">Assembled</button>
+          <button type="button" data-value="exploded" class="on">Exploded</button>
+        </div>
+        <button type="button" class="ghost" id="replay">Replay</button>
+        <p class="legend">
+          <span class="key solid"></span>Described in the complaints
+          <span class="key dashed"></span>Where they were filed
+        </p>
+        <p class="keys"><kbd>↑</kbd><kbd>↓</kbd> signals · <kbd>←</kbd><kbd>→</kbd> weeks · <kbd>space</kbd> explode · click a part</p>
+      </div>
+    </section>
+
+    <aside class="readout" id="readout"></aside>
+  </main>
+
+  <footer class="colophon" id="colophon"></footer>
+
+  <script src="/vehicle.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
